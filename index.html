@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Book Summaries — Venn Explorer</title>
+<style>
+  :root {
+    --bg: #0f1020;
+    --bg-2: #171833;
+    --panel: #1d1f3d;
+    --panel-2: #252848;
+    --text: #e7e8f7;
+    --muted: #9ea1c4;
+    --border: rgba(255,255,255,0.08);
+    --accent: #a78bfa;
+    --shadow: 0 10px 30px rgba(0,0,0,0.4);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; }
+
+  .app { max-width: 1400px; margin: 0 auto; padding: 28px 24px 48px; }
+
+  header.hero { margin-bottom: 22px; }
+  header.hero h1 {
+    font-size: 28px; margin: 0 0 6px; letter-spacing: -0.01em;
+    background: linear-gradient(90deg,#fff 0%,#a78bfa 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header.hero p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 14px 16px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 20px;
+  }
+  .toolbar-label { font-size: 12px; color: var(--muted); margin-right: 6px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--panel-2);
+    color: var(--text); font-size: 13px; cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s, background 0.15s;
+    user-select: none;
+  }
+  .chip:hover { border-color: rgba(255,255,255,0.2); transform: translateY(-1px); }
+  .chip .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+  .chip .count { color: var(--muted); font-size: 11px; margin-left: 4px; }
+  .chip.selected { background: rgba(167,139,250,0.15); border-color: var(--accent); }
+  .chip.disabled { opacity: 0.45; cursor: not-allowed; }
+  .chip.disabled:hover { transform: none; border-color: var(--border); }
+
+  .hint { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+  .grid {
+    display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 20px;
+  }
+  @media (max-width: 980px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px;
+  }
+  .panel h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: -0.01em; }
+  .panel h3 { margin: 18px 0 8px; font-size: 13px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* --- Venn --- */
+  .venn-wrap {
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 540px;
+  }
+  .venn-wrap svg { width: 100%; height: auto; max-width: 760px; }
+  .venn-circle {
+    fill-opacity: 0.22; stroke-width: 2;
+    transition: fill-opacity 0.2s, stroke-width 0.2s;
+    pointer-events: none;
+  }
+  .region-badge {
+    cursor: pointer;
+    transition: transform 0.15s, filter 0.15s;
+  }
+  .region-badge circle {
+    fill: rgba(255,255,255,0.95); stroke: rgba(0,0,0,0.25); stroke-width: 1;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35));
+  }
+  .region-badge text {
+    font-size: 14px; font-weight: 600; fill: #111222;
+    text-anchor: middle; dominant-baseline: central;
+    pointer-events: none;
+  }
+  .region-badge:hover { transform: scale(1.08); transform-origin: center; }
+  .region-badge.active circle { fill: var(--accent); stroke: #fff; stroke-width: 2; }
+  .region-badge.active text { fill: #fff; }
+  .region-badge.empty { opacity: 0.35; }
+
+  .theme-label {
+    font-size: 13px; font-weight: 600; letter-spacing: -0.01em;
+    text-anchor: middle; pointer-events: none;
+  }
+
+  .empty-state {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 14px; text-align: center; padding: 20px;
+  }
+
+  /* --- Regions strip --- */
+  .regions-strip {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px;
+  }
+  .region-btn {
+    padding: 8px 12px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-size: 12px; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .region-btn .region-dots { display: inline-flex; gap: 3px; }
+  .region-btn .region-dots span { width: 8px; height: 8px; border-radius: 50%; }
+  .region-btn .count { background: rgba(255,255,255,0.08); padding: 1px 7px; border-radius: 999px; font-size: 11px; }
+  .region-btn:hover { border-color: rgba(255,255,255,0.2); }
+  .region-btn.active { background: rgba(167,139,250,0.18); border-color: var(--accent); }
+  .region-btn.empty { opacity: 0.45; cursor: default; }
+
+  /* --- Detail panel --- */
+  .detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .detail-title { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; line-height: 1.2; }
+  .detail-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .theme-pills { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .theme-pill {
+    font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    background: rgba(255,255,255,0.06); color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .theme-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  ul.books-list { list-style: none; padding: 0; margin: 6px 0 0; }
+  ul.books-list li {
+    padding: 8px 10px; margin-bottom: 5px; border-radius: 10px;
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    background: var(--panel-2); border: 1px solid transparent; transition: border-color 0.15s, background 0.15s;
+  }
+  ul.books-list li:hover { border-color: rgba(255,255,255,0.15); }
+  ul.books-list li .title { font-size: 13px; }
+  ul.books-list li .author { font-size: 11px; color: var(--muted); margin-left: 8px; }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .tag {
+    font-size: 11px; padding: 4px 9px; border-radius: 999px;
+    background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.05);
+  }
+  .tag.kw { background: rgba(167,139,250,0.12); border-color: rgba(167,139,250,0.25); }
+  .tag.en { background: rgba(52,211,153,0.10); border-color: rgba(52,211,153,0.22); }
+
+  blockquote.quote {
+    margin: 10px 0; padding: 10px 14px; border-left: 3px solid var(--accent);
+    background: rgba(255,255,255,0.03); border-radius: 0 10px 10px 0;
+    font-size: 13px; color: #d8daf0; line-height: 1.55;
+  }
+
+  .back-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text);
+    padding: 5px 10px; border-radius: 8px; font-size: 12px;
+  }
+  .back-btn:hover { border-color: rgba(255,255,255,0.25); }
+
+  .empty-detail { color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+  footer.lib-foot { margin-top: 26px; font-size: 12px; color: var(--muted); text-align: center; }
+
+  /* Full library table */
+  .lib-toggle { margin-top: 20px; text-align: center; }
+  .lib-toggle button {
+    background: transparent; color: var(--muted); border: 1px dashed var(--border);
+    padding: 8px 16px; border-radius: 10px; font-size: 12px;
+  }
+  .lib-toggle button:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+  .library-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px; margin-top: 14px;
+  }
+  .library-card {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px; cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .library-card:hover { border-color: rgba(167,139,250,0.35); transform: translateY(-1px); }
+  .library-card .lt { font-size: 13px; font-weight: 500; }
+  .library-card .la { font-size: 11px; color: var(--muted); margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hero">
+    <h1>Book Summaries — Venn Explorer</h1>
+    <p>Explore patterns across <span id="stat-books"></span> books and <span id="stat-themes"></span> themes. Pick 2–3 themes to draw the diagram; click any region to see what the books inside share.</p>
+  </header>
+
+  <div class="toolbar">
+    <span class="toolbar-label">Themes</span>
+    <div id="theme-chips" style="display:contents;"></div>
+    <span class="hint" id="hint-text">Pick 2 or 3 themes</span>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="venn-wrap" id="venn-wrap">
+        <svg id="venn-svg" viewBox="0 0 760 560" role="img" aria-label="Venn diagram"></svg>
+      </div>
+      <div class="regions-strip" id="regions-strip"></div>
+      <div class="lib-toggle"><button id="lib-toggle-btn">Browse full library ▾</button></div>
+      <div id="library-grid" class="library-grid" style="display:none;"></div>
+    </div>
+
+    <div class="panel" id="detail-panel">
+      <div id="detail-content"></div>
+    </div>
+  </div>
+
+  <footer class="lib-foot">Exported from Notion · Analysis generated for Ru · <span id="generated-at"></span></footer>
+</div>
+
+<script>
+const DATA = {"themes":{"stoicism":{"label":"Stoicism & Self-Mastery","color":"#8B5CF6","description":"Ancient wisdom and disciplined inner life — ego, virtue, stillness, resilience."},"mind":{"label":"Mind & Behavior","color":"#EC4899","description":"How people actually think, decide, feel, and form habits."},"leadership":{"label":"Leadership & Influence","color":"#F59E0B","description":"Power, strategy, persuasion, design, and building teams or products."},"wealth":{"label":"Money & Wealth","color":"#10B981","description":"Mindset and mechanics of money, investing, and long-term financial success."},"tech":{"label":"Technology & AI","color":"#3B82F6","description":"Computing, intelligence, and how technology reshapes humanity."},"history":{"label":"History & Humanity","color":"#EF4444","description":"Human story across time — civilisations, lives, existential risks."}},"theme_summaries":{"stoicism":{"label":"Stoicism & Self-Mastery","color":"#8B5CF6","description":"Ancient wisdom and disciplined inner life — ego, virtue, stillness, resilience.","books":["Courage Is Calling","Discipline Is Destiny","Ego Is The Enemy","Obstacle Is The Way","Rebirth - A Hand Book","Right Thing, Right Now","Stillness Is The Key","Think Like a Monk"],"top_shared_keywords":["better","matter","sacrifice","ego","mind"]},"mind":{"label":"Mind & Behavior","color":"#EC4899","description":"How people actually think, decide, feel, and form habits.","books":["Algorithms to Live by","Behave","Blink","Chase, Chance, and Creativty","Ego Is The Enemy","Good Habits, Bad Habits","Read People Like a Book","Sapiens","Stillness Is The Key","The Big Leap","The Psychology of Money","Think Like a Monk","Think and Grow Rich","Thinking, Fast and Slow"],"top_shared_keywords":["ego","species","willpower","brain","subconscious","control","luck","better","words","decision","information","mind"]},"leadership":{"label":"Leadership & Influence","color":"#F59E0B","description":"Power, strategy, persuasion, design, and building teams or products.","books":["48 Laws of Power","Articulating Design Decisions","Inspired","Long Walk to Freedom","Mismatch","Read People Like a Book","Right Thing, Right Now","Secrets of Power Negotiation","The Diary of a CEO : The 33 Laws of Business and Life","The Leader Who Had No Title"],"top_shared_keywords":["words","user","problem","business","solve"]},"wealth":{"label":"Money & Wealth","color":"#10B981","description":"Mindset and mechanics of money, investing, and long-term financial success.","books":["The Diary of a CEO : The 33 Laws of Business and Life","The Psychology of Money","Think and Grow Rich"],"top_shared_keywords":[]},"tech":{"label":"Technology & AI","color":"#3B82F6","description":"Computing, intelligence, and how technology reshapes humanity.","books":["Algorithms to Live by","Brave New Words How AI Will Revolutionize Education (and Why That’s a Good Thing)","Edison","Inspired","Life 3.0","The Innovators","The Precipice","The Road Ahead"],"top_shared_keywords":["solution","education","risk","problem","system","information","technology","software"]},"history":{"label":"History & Humanity","color":"#EF4444","description":"Human story across time — civilisations, lives, existential risks.","books":["48 Laws of Power","Behave","Chase, Chance, and Creativty","Edison","Life 3.0","Long Walk to Freedom","Our Mathematical Universe","Sapiens","The Innovators","The Precipice"],"top_shared_keywords":["brain","humans","species","system","physics"]}},"books":[{"title":"48 Laws of Power","author":"Robert Greene","created":"December 18, 2023 9:07 PM","three_sentences":"1.","changed_me":"-","keywords":["power","envy","powerful","control","reveal","play","enemies","learn","words","game","understand","stir","master","friends"],"entities":["Half","Friends","Time","Words","Houdini","Kleppini","Powerful","Play","James Rothschild","Sun Pin"],"quotes":["Going slower also makes what you are doing more interesting — the audience yields to your pace, becomes entranced. It is a state in which time whizzes delightfully by. You much practice such illusions, which share in the hypnotist’s power to alter perceptions of time.","Remember: It takes patience and humility to dull your brilliant colors, to put on the mask of the inconspicuous. Do not despair at having to wear such a bland mask — it is often your unreadability that draws people to you and makes you appear a person of power.","Remember: When searching for suckers, always look for the dissatisfied, the unhappy, the insecure. Such people are riddled with weaknesses and have need that you can fill. Their neediness is the groove in which you place your thumbnail and turn them at will."],"themes":["leadership","history"],"word_count":7002},{"title":"Algorithms to Live by","author":"","created":"January 16, 2024 4:22 PM","three_sentences":"1.","changed_me":"-","keywords":["applicant","pool","strategy","leap","looking","applicants","arm","pull","switch simple","complete solution","solution","stopping","slot","optimal"],"entities":["Although","Leap Rule\n\nYou"],"quotes":["Robbins specifically considered the case where there are exactly two slot machines, and proposed a solution called the Win-Stay, Lose-Shift slot algorithm: choose an arm at random, and keep pulling it as long as it keeps paying off. If the arm doesn’t pay off after a paticular pull, then switch to the other one. Although this simple strategy is far from a complete solution, Robbin proved off after a particular pull, then switch to the other one. Although this simple strategy is far from a complete solution, Robbined proved in 1952 that it performs reliably better than chance. … turns out to be an element of the optimal strategy for balancing exploration and exploitation under a wide range of conditions.","Pg 12 Whence 37%? In your search for a secretary, there are two ways you can fail: stopping early and stopping late. When you stop too early, you leave the best applicant undiscovered. When you stop too late, you hold out for a better applicant who doesn’t exist. The optimal strategy will clearly require finding the right balance between the two, walking the tightrope between looking too much and not enough. Pg 13 Look - Then - Leap Rule You set a predetermined amount of time for “looking” - that is, exploring your options, gathering data - in which you categorically don’t choose anyone, no matter how impressive. After that point, you enter the “leap” phase, prepared to instantly commit to anyone who outshines the best applicant you saw in the look phase. … Enumerating these scenarios for four applicants tells us that we should still being to leap as soon as the second applicant; with five applicants in the pool, we shouldn’t leap before the third. As the applicant pool grows, the exact place to draw the line between looking and leaping settles to 37% of the pool yielding the 37% Rule."],"themes":["mind","tech"],"word_count":317},{"title":"Articulating Design Decisions","author":"Tom Greever","created":"May 28, 2022 3:41 PM","three_sentences":"1.","changed_me":"- I’m more confident in\n    - Answering effectively (WIP)\n    - Defending my design decision\n    - Breaking down my thought process\n    - Charming stakeholders","keywords":["stakeholders","design","designer","user","response","feedback","tactics","ask","decisions","problem","goals","confidence","help","meeting"],"entities":["State","Show","Identify","Apply","Ask Questions","Help Achieve","IDEAL Response"],"quotes":["(pg 7) “The way that we talk to them about our designs is the key to ensuring that we always end up with the best possible user experience. … All human relationships are really nothing more than a series of bound-up understandings and misunderstandings. (pg 11) “The difference between a good designer and a great designer is the ability to not only solve the problem, but also to articulate how the design solves it in a way that is compelling and fosters agreement. If you can do that, you’re a great designer. So I would say there are three things that every design needs to be successfulL 1. It solves the problem. 2. It’s easy for users. 3. It’s supported…"],"themes":["leadership"],"word_count":1344},{"title":"Behave","author":"Robert M. Sapolsky","created":"August 21, 2022 4:46 PM","three_sentences":"1. Neuro-psychology of human behaviour\n2. Understanding what triggers actions; its biology and outside influence\n3. Individual perspective and Group perspective; behaviour","changed_me":"- more in depth awareness of what triggers our behaviour. Good understanding of how our brain, body, and people function in certain situations.","keywords":["genes","invented","context","evolved","behaviour","humans","act","biological","species","willpower","reasoning","interesting","values","brain"],"entities":["Saying","Genes","Us and Them"],"quotes":["- It’s great if your frontal cortex lets you avoid temptation, allowing you to do the harder, better thing. But it’s usually more effective if doing that better thing has become so automatic that it isn’t hard. And it’s often easiest to avoid temptation with distraction and reappraisal rather than willpower. - While it’s cool that there’s so much plasticity in the brain, it’s no surprise - it has to work that way. - Childhood adversity can scar everything from our DNA to our cultures, and effects can be lifelong, even multigenerational. However, more adverse consequences can be reversed than used to be thought. But the longer you wait to intervene, the harder it will be. - Brains and cultures…"],"themes":["mind","history"],"word_count":923},{"title":"Blink","author":"Malcom Gladwell","created":"May 28, 2022 3:18 PM","three_sentences":"1. A person (usually an experts) judgment by the first impression is usually right\n2. Thick slicing - learning by understanding the full depth; Thin slicing - learning by collecting bits information.\n3. We can control our subconscious / biases by thinking carefully, and disciplined practice.","changed_me":"- Even though I think I don’t have bias, my subconscious has been primed to have ones\n- We can control it by recognition, practice, and time","keywords":["slicing learning","slicing","subconscious","control","practice","learning"],"entities":[],"quotes":[],"themes":["mind"],"word_count":73},{"title":"Brave New Words How AI Will Revolutionize Education (and Why That’s a Good Thing)","author":"Salman Khan","created":"September 4, 2024 5:10 PM","three_sentences":"Sal Khan has done a great job at apply the Gen AI technology in the learning space through his Khan Academy. This book dives deep into the ethics, use cases, and guidelines set at Khan Academy & shares methods for future growth as AI models improve over time. Overall, this is a books empowers people to use AI as a learning tool.","changed_me":"-","keywords":["generative","students","education","job","learning","agent","family","student","bias","khan","guardrails","classroom","teachers","lot"],"entities":["Khan Academy","Socratic","Essentially","Bloom","Sal Khan","Gen AI","Alexander Gil Fuentes","Generative AI"],"quotes":["(My note: Empowering the future) … students are creators, they’re producers, they are songwriters, they are singers, they are podcasters, they are curators of media and information. All of these designations require an increased depth of knowledge,” he says. “Learning is nonlinear; it’s continuous. AI shows is this integrated world.” Our self-confidence, he says, comes from an explicit understanding of the ways everything works together. Understanding this point puts our kids in a better position to interact with the world both in and out of these classroom. Once you’ve mastered that knowledge, everything else, comparatively, is a piece of cake.","“In the humanities - English, literature, art, music, and culture — we find, that generative AI is terrific step towards helping students create something original,” says Yale humanities professor Alexander Gil Fuentes. “We are learning what generative AI is good at and, more importantly, what it’s not good at. And what it’s not good at is originality.” So what is it good at? “I tell my students to use the technology to help them from zero,” Fuentes continues. “It’s a first-pass tool, and it’s their job to question the AI, double-check, triple check, and use it to move their original work forward.”","If kids could get micro-lessons in the form of ondemand videos, at their own time and pace, class time could be used for Socratic dialogue, collaborative assignments, and supported student work. Essentially, lectures were now happening at home and “homework” could happen in a much more interactive classroom environment."],"themes":["tech"],"word_count":2120},{"title":"Chase, Chance, and Creativty","author":"James H. Austin, MD","created":"November 24, 2023 8:58 PM","three_sentences":"A story of a scientist (MD) creative hunt for a medical solution. His failur and successful approaches, and the lessons he learned. Breakdown of what other factors and people have thought about chase, chance and creativity.","changed_me":"- Understood different types of luck\n- Inspired me to be persistant and patient\n- Got a perspective of other peoples creative journey","keywords":["creative","chance","luck","brain","ability","creativity","activity","meditation","abilities","nerve","attitude","scientist","adult","special"],"entities":["Chance","Bruce Barton","Nothing","Pogo","Whereas","During","Creative Personalities","Taylor and Barron","Charles Darwin","Walter Cannon"],"quotes":["Koestler identifies five characteristics of the outstanding scientist: - an oceanic sense of wonder; - a curious mixture of skepticism and credulity precocity; - dual abilities, both to generaliza and to concentrate on the particulars; - multuple potentials — enough to succeed in any one of several careers","… as Bruce Barton once phrased it, that: “Nothing splendid has ever been achieved except by those who dared believe that something inside them was superior to circumstance.” But most of their approach acknowledges a simple fact pointed out by Pogo when he said with greater whimsy and far greater accuracy: “We are confronted with insurmontable opportunities.”","The strong inner pressure to stand appart, to innovate, is exemplified by one physicist who said: “The only ideas that I will pursue are those I choose specifically because it is unlikely that anyone else would have approached them in the same way … I’m not going to waste my time on a standard way. The other guy can do that. I’m always trying to do things in a way that’s different or original.”"],"themes":["mind","history"],"word_count":2625},{"title":"Courage Is Calling","author":"Ryan Holidays","created":"February 10, 2023 7:02 PM","three_sentences":"1. Facing fears\n2. When to be courages, and types of it\n3. Motivation to take smart action","changed_me":"- I actually took action as I was reading it. Found the guts to do more presentation at work, did more reviews, even asked my UI manager (Henry Chu) for a raise\n- I’m taking action on artwork and learning (currently at the library and its 9:30pm on a Friday night when everyone is gone to Phil’s club to party)\n- I believe in myself and talent / skills, and it feels good!","keywords":["courage","afraid","willing","fear","stand","matter","sacrifice","decision","raise","greatness","party","okay","calls","away"],"entities":["Courage","Need","Socrates","Henry Chu","Rabbi Hillel","Thomas Edison","Start Small","Naval Academy"],"quotes":["- pg 16 - The important thing is that we are not afraid - pg 19 - Is that something you to be afraid of? - pg 22 - There has never been a change that was not met with doubts. There has never been a movement that was not mocked. There was never a groundbreaking business that was’t loudly predicted to fail. And there has never, ever been a time when the average opinion of faceless, unaccountable stranger should be valued above our own considered judgment. - pg 26 - Whether its approaching the famous person at a party, talking to your kids about sex, or asking your boss for a raise, the reality is that both sides are…"],"themes":["stoicism"],"word_count":1882},{"title":"Discipline Is Destiny","author":"Ryan Holiday","created":"November 17, 2023 8:26 PM","three_sentences":"1.","changed_me":"-","keywords":["discipline","pushing","enjoy","powerful","passion","leaders","ask","especially","overextented","rendered","magisterially","fututure","desire vulnerable","chase self"],"entities":["Discipline","Pushing","Self","Dependence","Greatness","Socrates","Especially","Robert Greene","Bhagavad Gita"],"quotes":["How do you know if something is superfluous? Well, one indication can be how hard other people are pushing on you. The insecure constantly pressure us to be like them. Another is how much your interest is motivated by keeping up or a fear of missing out. Ask yourself: How did it go last time I got the thing I craved — how long did the feeling last (compared to the buyer’s remorese)? And how will you know that this thing won’t actually make your life easier? Because the last thing didn’t either! Go check your junk drawer or the back of your closet for proof.","Perfect is not jest the enemy of the good, as they say, but it’s the enemy of everything that might come after. If you get stuck, your potentil does too. This is why finishing is iteself an achievement, an act of momental discipline that must happen.","Robert Greene puts it perfectly: “Powerful people impress and intimidate by saying less.” The irony, of course, is that with power comes license to say whatever you want, whenever you want, to whomever you want. And yet, it is the discipline to not do these thing that creates the presence that powerful people enjoy."],"themes":["stoicism"],"word_count":1479},{"title":"Edison","author":"Edmund Morris","created":"June 17, 2024 9:10 PM","three_sentences":"1. Biography of Thomas Alva Edisons life in revers chronologically \n2. Very inspiring work, and his work ethic is crazy \n3. Very ambitious and relentless business man who only gives up when beaten to the ground","changed_me":"- I now know that I don’t work hard enough as Edison, but has the willpower to work on anything as much as him.\n    - I guess the contemporary generation is very leaned towards work life balance compared to 19th and 20th century.\n    - Also my goals are more artistic and design based which I enjoy. And I don’t have to stay up all nighters like Edison for my work and hobbies.","keywords":["edison","rod","claimed","spiral","invention","light","begin","current","edisons","boulder","ordered","chair","gallon","electric"],"entities":["Edison","Biography of Thomas Alva Edisons","James Newton","Fort Myers","Wall Street","Natural Philosophy","Edgar Allan Poe","Domain of Arnheim","Henry Morton","Steven Institute of Technology"],"quotes":["(Note: Edison had a gifted memory) I asked him where he had picked up so much information about Wall Street and he said that for five years he ran the stock tickers, Facts once absorbed by him are ever forgotten.","(Note: Edison did sprint to ideas & bring his vision to life) In one sleepless twenty-four-hour stretch he designed what would become the largest cement mill in the country, right down to minute details of plumbing, lubrication, and ventilation.","(Note: Sprints) Edison began to lose hope that the machine would be ready in time for the opening of the exposition on 11 August. He ordered an emergency reconstruction and rewinding of the armature, deploying two shifts of fifty-five and sixty workers around the clock for eight day. While they dismantled the core, he filled twenty-three pages of his notebook with wiring diagrams of almost astronomical beauty."],"themes":["history","tech"],"word_count":1483},{"title":"Ego Is The Enemy","author":"Ryan Holiday","created":"May 28, 2022 3:30 PM","three_sentences":"1. Great points on how to cognitively tame ego by being humble.\n2. Ego will stop you from achieving your full potential.","changed_me":"-","keywords":["ego","pride","success","better","student","humble","universe","words","organization","sobriety","noise","standards","stop","challenge"],"entities":["Frank Shamrock","Jim Collins","John Wooden","Marcus Aurelius","Bo Jackson","Daniele Bolelli"],"quotes":["(pg 26 - 27) “ Talk depletes us. Talking and doing fight for the same resources. Research shows that while goal visualization is important, after a certain point our mind begins to confuse it with actual progress. The same goes for verbalization. Even talking aloud to ourselves while we work through difficult problems has been shown to significantly decrease insights and breakthroughs. After spending so much time thinking, explaining, and talking about a task, we start to feel that we’ve given it our best try, although of course we haven’t.” (pg 32) “ Appearances are deceiving. Having authority is not the same as being an authority. Having the right and being right are not the same either. Being promoted doesn’t…"],"themes":["stoicism","mind"],"word_count":2594},{"title":"Good Habits, Bad Habits","author":"Wendy Wood","created":"January 1, 2026 6:42 PM","three_sentences":"1.","changed_me":"-","keywords":["gym","single","willpower","mental","strength","reasons","decision-making","executive control","decision","heavy","exerting","executive","processes","minds"],"entities":["Day One"],"quotes":["Science is showing that, regardless of Nike ads and conventional wisdom, we are not one single unified whole. In psychological terms, we do not have a single mind. Instead, our minds are composed of multiple separate but interconnected mechanisms that guide behavior. Some of these mechanisms, it turns out, are suited to handle change. These are the features we know—our decision-making ability and willpower. These are familiar because we consciously experience them. When we make decisions, we consciously attend to relevant information and generate solutions. When we exert willpower, we actively engage mental effort and energy. Decisions and willpower draw on what we call executive-control functions in the mind and brain, which are thoughtful cognitive processes, to select and monitor…"],"themes":["mind"],"word_count":411},{"title":"Inspired","author":"Marty Cagan","created":"June 22, 2023 2:00 PM","three_sentences":"1.","changed_me":"-","keywords":["product","user","solution","risk","business","discovery","build","customer","engineers","problem","teams","solve","feasibility","stakeholder"],"entities":["Business","Feasibility","Fall","Financial","Performance","George Patterson"],"quotes":["…and then there’s the often-messy business risk, where we have to make sure that the solution we come up with in discovery works for the different parts of our company. Here are some common examples of that: - Financial risk - can we afford this solution? - Business development risk — does this solution work for our partners? - Marketing risk — is this solution something our sales staff is equipped to sell? - Legal risk — is this something we can do from a legal or compliance perspective? - Ethical risk — is this solution something we should do?","Before we jump into the alternative, however, we need to remind ourselves that roadmaps have existed for so long because they serve two purposes, and these needs don’t go away: - The first purpose is because the management of the company wants to make sure that teams are working on the highest-business-value items first. - The second purpose is because — since they’re trying to run a business — there are cases where they need to make date-based commitments, and the roadmap is where they see and track those commitments (even though in most companies, they rarely trust the dates anymore).","I have seen many inexperienced product managers do a walkthrough with a prospective customer when they should have prepared a product demo. Or another really common rookie mistake is to do a product demo during a user test, and then ask the user what they think."],"themes":["leadership","tech"],"word_count":2380},{"title":"Life 3.0","author":"Max Tegmark","created":"September 23, 2024 11:53 AM","three_sentences":"1. All about AI and its capabilities\n2. Theoretical stories and current AI in action","changed_me":"-","keywords":["conscious","consciousness","humans","goals","intelligence","system","information","brain","superintelligent","goal","technology","ais","unconscious","physics"],"entities":["THE BOTTOM LINE","Life","Humans","Superintelligence","Einstein","Matter","Intelligence","Earth","Marshall Brain","Specifically"],"quotes":["Location 154 “Human Intelligence Tasks.” These tasks ranged from transcribing audio recordings to classifying images and writing descriptions of web pages, and all had one thing in common: if you did them well, nobody would know that you were an AI. Location 484 When a bacterium makes a copy of its DNA, no new atoms are created, but a new set of atoms are arranged in the same pattern as the original, thereby copying the information. In other words, we can think of life as a self-replicating information-processing system whose information (software) determines both its behavior and the blueprints for its hardware. Atoms are recycled Location 554 All this requires life to undergo a final upgrade, to Life 3.0, which…"],"themes":["tech","history"],"word_count":4941},{"title":"Long Walk to Freedom","author":"Nelson Mandela","created":"August 29, 2023 5:31 PM","three_sentences":"1. Courage to fight for freedom\n2. Selfless acting \n3. Peace and Reconciliation","changed_me":"-","keywords":["enemy","prison","authorities","garden","cultivates","freedom","oppressor","poverty","struggle","fight","sides","leader","adversary","conveyed"],"entities":["Peace and Reconciliation","South Africa"],"quotes":["(my note: It’s the system not the people) I was asked as well about the fears of whites. I knew that people expected me to harbor anger toward whites. But I had none. In prison, my anger toward white decreased, but my hatred for the system grew. I wanted South Africa to see that I loved even my enemies while I hated the system that turned us against one another.","There is little favourable to be said about poverty, but it was often an incubator of true friendship. Many people will appear to befriend you when you are wealthy, but precious few will do the same when you are poor. If wealth is a magnet, poverty is a kind of repellent. Yet, poverty often brings out the true generosity in others.","In every meeting with an adversary, one must make sure on has conveyed precisely the impression one intends to."],"themes":["history","leadership"],"word_count":1212},{"title":"Mismatch","author":"Kat Holmes","created":"February 26, 2023 12:39 AM","three_sentences":"1.","changed_me":"-","keywords":["exclusion","diversity","inclusive","persona","human","designing","designers","biases","spectra","participate","solve","tools","shape","spectrum"],"entities":[],"quotes":["With this in mind, let’s take a closer look at three skills of successful inclusive designers: - Identify ability biases and mismatched interactions between people and world. - Create a diversity of ways to participate in an experience. - Design for interdependence and bring complementary skills together.","- Recognize exclusion. Exclusion happens when we solve problems using our own biases. - Learning from human diversity. Human beings are the real experts in adapting to diversity. - Solve for one, extend to many. Focus on what’s universally important to all humans.","Tying back to the persona spectrum, it’s important to understand what motivates a person to use a solution. Rarely is it a purely functional reason, like knowing the identity of a sound. More often they are motivated by some universal human need, like an increased sense of independence or creating an emotional connection."],"themes":["leadership"],"word_count":352},{"title":"Obstacle Is The Way","author":"Ryan Holiday","created":"August 20, 2024 3:07 PM","three_sentences":"1.","changed_me":"-","keywords":["obstacles","obstacle","action","emotions","choose","perspective","front","matter","actions","actually","quit","mind","overcome","ignore"],"entities":["Life","Behind the Serenity Prayer","Art of Acquiescence","Amor Fati"],"quotes":["It’s okay to be discouraged. It’s not okay to quit. To know you want to quit but to plant your feet and keep inching closer until you take the impenetrable fortress you’ve decided to lay siege to in your own life — that’s persistence.","Objectivity means removing “you” — the subjective part from the equation. Just think, what happens when we give others advice? Their problems are crystal clear to us, the solutions obvious. Something that’s present when we deal with our own obstacles is always missing when we hear other people’s problems: the baggage. With other people we can be objective. We take the situation at face value and immediately set about helping our friend to solve it. Selfishly — and stupidly — we save the pity and the sense of persecution and the complaints for our own lives.","What we can do is limit and expand our perspective to whatever will keep us calmest and most ready for the task at hand. Think of it as selective editing—not to deceive others, but to properly orient ourselves. And it *works*. Small tweaks can change what once felt like impossible tasks. Suddenly, where we felt weak, we realize we are strong. With perspective, we discover leverage we didn’t know we had. Perspective has two definitions. 1. Context: a sense of the larger picture of the world, not just what is immediately in front of us. 2. Framing: an individual’s unique way of looking at the world, a way that interprets its events."],"themes":["stoicism"],"word_count":1948},{"title":"Our Mathematical Universe","author":"","created":"November 8, 2025 4:03 PM","three_sentences":"1.","changed_me":"-","keywords":["universe","inflation","physics","space","mathematical","properties","quantum","observer","universes","level","hydrogen","different","parallel","cosmic"],"entities":["Level","Figure","Earth","Einstein","Specifically","Indeed","Level II","Gamow","Well","Big Bang"],"quotes":["… In that spirit, this quote by physics Nobel laureate Steven Weinberg resonates with me: “This is often the way it is in physics — our mistake is not that we take our theories too seriously, but that we do not take them seriously enough.”","A rubber band has negative pressure because you need to work to expand it. For a substance with positive pressure, like air, it’s the other way around: you need to do work to compress it. In summary, the inflating substance has to have negative pressure in order to obey the laws of physics, and this negative pressure has to be so huge that the energy required to expand it to twice its volume is exactly enough to double its mass.","I’ve seen three main reactions to this observed fine-tuning: 1. Fluke: It’s just a fluke coincidence and there’s nothing more to it. 2. Design: It’s evidence that our Universe was designed by some entity (perhaps a deity or an advanced universe simulating life form) with the knobs deliberately fine-tuned to allow life. 3. Multiverse: It’s evidence for the Level 2 multiverse, since if the knobs have all settings somewhere, it’s natural that we’ll exist and find ourselves in a habitable region."],"themes":["history"],"word_count":5190},{"title":"Read People Like a Book","author":"Patrick King","created":"February 17, 2023 4:20 PM","three_sentences":"1.","changed_me":"-","keywords":["body","lie","language","behavior","liars","liar","story","information","unconscious","questions","words","general","temperaments","personality"],"entities":["Look","Also","Takeaways","Macro","Keirsey","Liars","Abraham Maslow","Psychologist Paul Ekman","Laura Rittenhouse"],"quotes":["Lie detecting is generally most accurate when: - You have a solid baseline of behavior against which to compare current behavior - The person doing the lying is spontaneous, i.e., they haven’t had any time to rehearse their lie or prepare themselves - The lie comes with real consequences for getting caught — this may up the stakes and make liars more nervous.","Pleasure and pain are changed by time. In general, we focus on the here and now: what can i get very soon that will bring me happiness? Also, what is coming up very soon that could be intensely painful that I’ll have to avoid? When considering the attainment of comfort, we’re more tuned into what might happen immediately. The pleasure and pain that might happen months or years from now don’t really register with us — what’s most important is whatever’s right at our doorstep. Of course, this is another way in which our perceptions are flawed and why we procrastinate so frequently.","The general principle is pretty obvious: bodies expand when they are comfortable, happy, or dominant. They contract when unhappy, fearful, or threatened. Bodies move toward what they like and away from what they don’t link. Leaning toward a person can show agreement, comfort, flirtation, ease, and interest. Likewise, crossing the arms, turning away, leaning back, and using tightly crossed legs…."],"themes":["mind","leadership"],"word_count":3453},{"title":"Rebirth - A Hand Book","author":"Ven. K. Sri Pemaloka Nayaka Thero","created":"July 26, 2023 11:00 AM","three_sentences":"1.","changed_me":"-","keywords":["reason","samsara","birth","kamma","caterpillar","born","citta","butterfly","buddha","death","according","existence","objects","bodily"],"entities":["Buddha","According","Paticca Samuppada","Law of Gravity"],"quotes":["If one can accept life existences, then there is no doubt about present birth. There is also existence of past birth or life before or future. Only you have to think, which is first, egg or chicken! By logical thinking and investigation we can understand the existence of a life in the past rebirth.","It is impossible to find the beginning of samsara (life circle) in each individual, as it is impossible to find where is the beginning of a circle.","“Beware bodily misdeed, restrain your body Eliminate misdeed of the body, and be of good bodily conduct.” Dh.231. Bodily tie or fetters binding on to samsara of which there are four; covetousness (abhijja), malevolence or ill-will (byapada), delusion (silabbata-paramasa) and inclination to dogmatize (idam-sacchanivesa) D.iii.94,100. According to the Itivuttake.56, The trye wisdom is achievable regarding the use of the body as an instrument of action."],"themes":["stoicism"],"word_count":1277},{"title":"Right Thing, Right Now","author":"Ryan Holiday","created":"August 10, 2024 8:09 PM","three_sentences":"1. Stoic stories of doing the righteous thing even if it does not help one self","changed_me":"-","keywords":["justice","integrity","virtue","pragmatism","love love","profession","sacrifice","better","love","hard","daily","unrewarded","unpunished","gandhi"],"entities":["Integrity","Better","Justice","Virtue","Gandhi"],"quotes":["Discipline is so often battle against procrastination. But justice can be too. We don’t want to do it because we know it will be hard. Because we know there will be costs. Because we have other priorities too. The tricky thing is we don’t have to tell ourselves we’re never going to do it, we can tell a more comforting lie instead: I’ll do it later. I’ll do it when I’m more secure. I’ll do it when it will really count. But this violates Aristotle’s view of virtue. It wasn’t a thing you arrived at, he said, it was a daily practice — it was a habit. And in this daily practice, we become who we are.","There is an expression: It’s not real principle unless it costs you money. Integrity ceases to be an abstraction when life presents you the opportunity to act on it. Integrity then becomes real. It is proven. You have proven yourself responsible and responsible to it. But it doesn’t just take from us. It also guides us, supports us, reassures us.","We must understand: Justice is not this thing we demand of other people, but something we demand of ourselves. It’s not a thing we talk about, it’s a way of life. Nor must it be always an abstract, cosmic thing. It can be practical, accessible, and personal. Indeed, where else better to start? Justice can be… …the standards we hold ourselves to …the way we treat people …the promises we keep …the integrity we bring to our words …the loyalty and generosity we give to our friends …the opportunities we accept (and turn down) …the things we care about …the difference we make for people"],"themes":["stoicism","leadership"],"word_count":841},{"title":"Sapiens","author":"Yuval Noah Harari","created":"September 29, 2023 8:35 PM","three_sentences":"1.","changed_me":"-","keywords":["sapiens","order","gold","suffering","animals","food","human","dna","family","religion","species","copies","wars","wheat"],"entities":["Sapiens","Homo","Mediterranean","India","Buddhist","Other","Neanderthals","Human","Christianity","Chinese"],"quotes":["*(My note: we are all a culture mix)* Not that this cultural melting pot made the process of cultural assimilation any easier for vanquished. The imperial civilization may well have absorbed numerous contributions from various conquered peoples, but the hybrid result was still alien to the vast majority.","*(My note: universal orders that created societies)* The first universal order to appear was economic: the monetary order. The second universal order was political: the imperial order. The third universal order was political: the universal religions such as Buddhism, Christianity and Islam.","*(My note: continuation to the statement made in pg 212)* Building and maintaining an empire usually reqiured the vicious slaughter of large populations and the brutal oppression of everyone who was left. The standard imperial toolkit include wars, enslavement, deportation and genocide."],"themes":["history","mind"],"word_count":3750},{"title":"Secrets of Power Negotiation","author":"Roger Dawson","created":"May 28, 2022 4:07 PM","three_sentences":"1.","changed_me":"-","keywords":["authority","side","negotiation","proposal","offer","higher","impasse","negotiating","flinch","split difference","difference","gambit","recommend","split"],"entities":["Felt","Found","Higher Authority","Appeal","Use the Feel","Reluctant Seller","Reluctant Buyer","Counter Gambit","Counter Gambits","Aside Gambit"],"quotes":["Pg 16 “What you should be asking for is your MMP - your maximum plausible position. This is the most you can ask for and still have the other side see some plausibility in you position.” Pg 25 “Ask for more than you expect to get, for five reasons: - You might just get it. - It gives you some negotiating room. - It raises the perceived value of what you’re offering. - It prevents the negotiation from deadlocking. - It creates a climate in which the other side feels they won.” Pg 29 “Power negotiators are careful that they don’t fall into the trap of saying yes too quickly, which automatically triggers in the other person’s mind the following:…"],"themes":["leadership"],"word_count":1113},{"title":"Stillness Is The Key","author":"Ryan Holiday","created":"May 28, 2022 3:36 PM","three_sentences":"1.","changed_me":"-","keywords":["stillness","sleep","cultivate","world","develop","sit","seek","present","better","consuming","wounds","tout","job","understands"],"entities":["Both","Find","Seek","Develop","Marcus Aurelius","Thich Nhat Hanh","Billie Jean King"],"quotes":["Pg 21 “... What we will need then is that same stillness that Kenndey drew upon. His calmness. His open-mindedness. His empathy. His clarity about what really mattered. In these situations we must: - Be fully present. - Empty our mind of preconceptions. - Take our time. - Sit quietly and reflect. - Reject distraction. - Weigh advice against the counsel of our convictions. - Deliberate without being paralyzed. “ Pg 25 “ ” People don’t understand that the hardest thing is actually doing something that is close to nothing,” Abramović said about the performance. “It demands all of you … there is no object to hide behind. It’s just you.” Being present demands all of us. It’s not nothing.…"],"themes":["stoicism","mind"],"word_count":1566},{"title":"The Big Leap","author":"Gay Hendricks","created":"April 25, 2025 10:29 AM","three_sentences":"1.","changed_me":"-","keywords":["zone","upper limit","upper","limit","worry","genius","ego","criticizing","fundamentally","flawed","bug","positive","problem","commitment"],"entities":["Upper Limit","Zone of Genius","Big Leap","Upper Limit Problem","Hidden","Zone of Competence","Zone of Excellence","Ultimate Success Mantra"],"quotes":["[My note: Hidden barrier two: Disloyalty & Abandonment] Behind every communication problem is a sweaty ten-minute conversation you don’t want to have. However, the moment you work up the courage to have it, you collect an instant reward in relief as well as open up a flow of communication that will allow you to resolve the situation.","(My note: Try not to feel the pressure of time. Things will happen just the way it is) Once you understand that you’re where time comes from, you have the power to make as much of it as you want. You’re the boss. I know that might sound strange, but I promise you that this is the way time actually works. Before I started teaching this concept to others, I learned it myself… the hard way.","[My note: How to maintain success & grow?] People often experience big breakthroughs…and then find a way to avoid relishing their achievement. They receive an award at work and then have a screaming argument with their spouse later that same night. They get the job of their dreams and then get sick; they win the lottery, then have an accident. The newfound success trips their Upper Limit switch, and they plummet back to the familiar setting they’ve grown used to."],"themes":["mind"],"word_count":1780},{"title":"The Diary of a CEO : The 33 Laws of Business and Life","author":"Steven Bartlett","created":"September 3, 2024 7:14 PM","three_sentences":"1.","changed_me":"-","keywords":["philosophy","value","evidence","law","kaizen","fill buckets","buckets order","hire smart","effective","buckets","phrases","potentially","hire","fill"],"entities":["Steve Jobs"],"quotes":["The law: Fill your five buckets in the right order Applied knowledge is skill, and the more you can expand and apply your knowledge, the more value you’ll create in the world. This value will be repaid in growing network, abundant resources and a robust reputation. Make sure you fill your buckets in the right order.","The law: Let them try and they will buy Getting your product into customer’ hand remains an incredibly powerful tool for salespeople, marketers and brands. Next time you’re trying to make someone love something and pay a good price for it, don’t just tell them how great it is, use the power of the endowment effect and take a page out of Apple’s book: let them touch it, play with it, test drive it and try it out. If you do, like my niece, they just might not want to give it back.","Having a back-up plan, or even considering one, has been shown to potentially hinder your performance by making you less driven to hit your primary goal."],"themes":["leadership","wealth"],"word_count":798},{"title":"The Innovators","author":"Walter Isaacson","created":"April 2, 2025 11:43 AM","three_sentences":"1.","changed_me":"- I realized the fact that it takes so many people to turn an idea into reality\n-","keywords":["computer","computers","gates","nupedia","internet","mauchly","software","network","called","machine","innovation","allen","system","web"],"entities":["Gates","Internet","Nupedia","Mauchly","Allen","Berners","Bell Labs","Harvard","Roberts","Wikipedia"],"quotes":["(my note: UX) Mosaic was popular because it could be installed simply and enabled images to be embedded in Web pages. but it became even more popular because Andreessen knew one of the secrets of digital-age entrepreneurs: he fanatically heeded user feedback and spent time on Internet released updated versions. “It was amazing to launch a product and get immediate feedback,” he enthused.","There was key lesson for innovation: Understand which industries are symbiotic so that you can capitalize on how they will spur each other on.","(my note: packet switching security idea & implementers) In contrast to the bureaucracy-laden Raytheon, BBN had a nimble band of brilliant engineers, led by two refugees from MIT, Frank Heart and Robert Kahn. They helped to improve Roberts’s proposal next, the sending IMP would keep it stored until it got an acknowledgement from the receiving IMP, and it would resend the message if the acknowledgment didn’t come promptly. That became a key to the net’s reliability. At each step, the design was being improved by collective creativity."],"themes":["tech","history"],"word_count":8722},{"title":"The Leader Who Had No Title","author":"Robin Sharma","created":"September 23, 2024 10:09 AM","three_sentences":"1.","changed_me":"-","keywords":["begins","leaders","business","listening","success","leadership","self-leadership","personal","safe","small","intelligent","stronger","remembering","individuals"],"entities":["Self","Lucky Breaks","Turbulent Times Build Great","Stronger Your Leadership"],"quotes":["The Deeper Your Relationships, the Stronger Your Leadership. The main business of business is to connect with — and add value to — to people. That’s such an extremely important point to remember as you build out your career — and craft a richly rewarding life.","Failure, on the other hand, is just as easy to slip into. Failure’s is nothing more than the inevitable outcome of a few small acts of daily neglect performed consistently over time so that they take you past the point of no return.","… by the way, all of the fears that are chaining your progress as a leader and as a person are nothing more than the lies you’ve sold yourself. Stop investing in them! Because life’s just too big to play small"],"themes":["leadership"],"word_count":800},{"title":"The Precipice","author":"Toby Ord","created":"July 16, 2023 4:59 PM","three_sentences":"1.","changed_me":"-","keywords":["existential","risk","carbon","humanity","catastrophe","research","geoengineering","dioxide","problem","potential","generations","ocean","climate","longterm"],"entities":["Earth","Importance","Tractability","Following Bostrom","Future of Humanity Institute","Owen Cotton"],"quotes":["Following Bostrom, I shall call these “existential catastrophes,” defining them as follows: An existential catastrophe is the destruction of humanity’s longterm potential. An existential risk is a risk that threatens the destruction of humanity’s longterm potential. These definitions capture the idea that the outcome of an existential catastrophe is both dismal and irrevocable. We will not just fail to fulfill our potential, but this very potential itself will be permanently lost. While I want to keep the officials definitions succinct, there are several areas that warrant clarification.","Sometimes the mere knowledge that something is possible can be enough: for then the bad actor can wholeheartedly pursue it without fear of pouring resources into a dead end. Information hazards are especially important for biorisk, due to its high ratio of misuse risk to accident risk. And they don’t just affect the biologist. While exploring society’s current vulnerabilities or the dangers from recent techniques, the biosecurity community also emits dangerous information (something I’ve had to be acutely aware of while writing this section). This makes the job of those trying to protect us even harder.","… Because the arrow of time makes it so much easier to help people who come after you than people who come before, the best way of understanding the partnership of the generations may be asymmetrical, with duties all flowing forward in time — paying it forwards. On this view, our duties to future generations may thus be grounded in the work our ancestors did for us when we were future generations."],"themes":["history","tech"],"word_count":784},{"title":"The Psychology of Money","author":"Morgan Housel","created":"October 26, 2024 11:21 AM","three_sentences":"1. How to think positively about money\n2. Real stories about successes and failures in money management\n3. Advice on how to use our current income to help us live better in the long run","changed_me":"- pg 151\n\n(my note: don’t rush into things)\n\nHarvard psychologist Daniel Gilbert once said: \n\n> At every stage of our lives we make decisions that will profoundly influence the lives of the people we’re going to become, and then when we become those people, we’re not always thrilled with the decisions we made. So you people pay good money to get tattoos removed that teenagers paid good money to get. Middle-aged people rushed to divorce people who young adults rushed to marry. Older adults work hard to lose what middle-aged adults worked hard to gain. On and on and on.\n>","keywords":["money","save","adults","middle-aged","future","rushed","investing","returns","investors","decisions","luck","financial","daniel","highest"],"entities":["Harvard","Daniel Gilbert","George Soros","Singer Rihanna","Daniel Kahneman"],"quotes":["Risk and luck are doppelgängers. This is not an easy problem to solve. The difficulty in identifying what is luck, what is skill, and what is risk is one of the biggest problems we face when trying to learn about the best to manage money.","The biggest single point of failure with money is a sole reliance on a paycheck to fund short-term spending needs, with no savings to create a gap between what you think your expenses are what they might be in the future. The trick that often goes overlooked — even by the wealthiest is what we saw in chapter 10: realizing that you don’t need a specific reason to save. It’s fine to save for a car, or a home, or for retirement. But it’s equally important to save for things you can’t possibly predict or even comprehend — the financial equivalent of field mice.","Daniel Kahneman once told me about the stories people tell themselves to make sense of the past. He said: Hindsight, the ability to explain the past, gives us the illusion that the world is understandable. It gives us the illusion that the world makes sense, even when it doesn’t make sense. That’s a big deal in producing mistakes in many fields."],"themes":["wealth","mind"],"word_count":1616},{"title":"The Road Ahead","author":"Bill Gates","created":"May 1, 2024 4:48 PM","three_sentences":"1. Beginning and evolution of Microsoft\n2. Tech / Internet boom thinking back in 1996\n3. Understanding what failed and what stuck over time","changed_me":"- Proof that majority of the work we might do will be lost in time and maybe if we are lucky, a small percentage of our work will be success.","keywords":["microsoft","ibm","companies","software","content","on-line","technology","education","timing","medium","skills","everybody","information","standard"],"entities":["Microsoft","Netscape","Companies","Coca","Cola"],"quotes":["*(My note: Strategies)* Microsoft operating systems are offered today by over 100 different manufactures, which gives customers an immense range of choices and options. Microsoft has been able to provide compatibility because hardware that would introduce incompatibility. The hundreds of thousands of software developers don’t need to worry about what PCs their software will run on. Although the term “open” is used in many different choices to the customer.","*(My note: Personalization thinking)* Software enables hardware to perform a number of functions, but one a program is written, it usually stays the same. Softer software will seem to get smarter as you use it. It will learn about your requirements and preferences in much the way a human assistant does, and like a good human assistant, it will become more helpful the more it learns about you and your work.","*(My note: Timing and luck beats experience)* Microsoft was quite fortunate in its early years in that it established players of the industry all but ignored personal computing. We didn’t dace the kind of focused competition from competitors that Netscape will as its jockeys for a profitable leadership position. On the other hand, Netscape started with the advantage of experience management and a high stock price that let it buy other companies."],"themes":["tech"],"word_count":1063},{"title":"Think Like a Monk","author":"Jay Shetty","created":"January 8, 2023 5:13 PM","three_sentences":"1. Training your mind for peace and purpose everyday. Many lessons on how to reflect and take actions.","changed_me":"- Helped me with key insights on reflecting.\n- To be a good person; positive mindset.","keywords":["happiness","mind","ego","remember","joy","meaning","imperfections","regrets","deeds","monk","grounded","purpose","energy","fail"],"entities":["Happiness","Monks","Practice Humility","Letting","Self","Selflessness","Thich Nhat Hanh","Bhagavad Gita"],"quotes":["- pg 10: We are not our minds, but the mind is the vehicle by which we decide what is important in our hearts. The movies we watch, the music we hear, the books we read, the TV shows we binge, the people we follow online and offline. What’s on your news feed in feeding your mind. - pg 17: Your monk mind can and must learn from other people. The challenge is to do so consciously by asking ourselves simple questions: What qualities do I look for/admire in family, friends, colleagues? Are they trust, confidence, determination, honesty? Whatever they may be, these qualities are in fact, our own values - the very landmarks we should use to guide ourselves…"],"themes":["stoicism","mind"],"word_count":1890},{"title":"Think and Grow Rich","author":"Napoleon Hill","created":"July 25, 2023 5:31 PM","three_sentences":"1.","changed_me":"-","keywords":["mind","emotion","faculty","definite","imagination","knowledge","habit","emotions","man","action","power","subconscious","control","negative"],"entities":["Knowledge","PLANS OF ACTION","DEFINITE END","Lack","Fate","PERSISTENCE","IMAGINATION","Through","Christ","Edison"],"quotes":["When Henley wrote the prophetic lines, “I am the Master of my Fate, I am the Captain of my soul,” he should have informed us that we are the Masters of our Fate, the Captains of our Souls, because we have the power to control our thoughts.","Every person who wins in any undertaking must be willing to burin his ships and cut all sources of retreat. Only by so doing can one be sure of maintaining that state of mind known as a BURING DESIRE TO WIN, essential success.","You may find it necessary to “snap” our of your mental inertia, through a similar procedure, moving slowly at first, then increasing your speed, until you fain complete control over your will. Be PERSISTENT no matter how slowly you may, at first, have to move. WITH PERSISTENCE WILL COME SUCCESS."],"themes":["wealth","mind"],"word_count":2481},{"title":"Thinking, Fast and Slow","author":"Daniel Kahneman","created":"April 28, 2023 4:42 PM","three_sentences":"1. Lots of experimental based explanation\n2.","changed_me":"-","keywords":["system","information","events","casual","coherence","outcomes","judgment","evidence","conclusion","decision","mood","probability","confidence","intuition"],"entities":["WYSIATI","Indeed","Amos","Bayesian","Meehl","Complexity","Simple","Herbert Simon","Bernoulli","Narrow"],"quotes":["The dominance of conclusions over arguments is most pronounced where emotions are involved. The psychologist Paul Slovic has proposed an affect heuristic in which people let their likes and dislikes determine their beliefs about the world. Your political preference determines the arguments that you find compelling.","The conclusion is straightforward: the decision weights that people assign to outcomes are not identical to the probabilities of these outcomes, contrary to the expectation principle. Improbable outcomes are over weighted-this is the possibility effect. Outcomes that are almost certain are underweighted relative to actual certainty. The expectation principle, by which values are weighted by their probability, is poor psychology.","The gorilla study illustrates two important facts about our minds: we can be blind to the obvious, and we are also blind to our business."],"themes":["mind"],"word_count":5060}]};
+
+const state = {
+  selectedThemes: ["stoicism", "mind", "leadership"],
+  selectedRegion: null,   // Set-like: sorted array of theme ids, or null
+  selectedBook: null,     // book title or null
+  libraryOpen: false,
+};
+
+const THEMES = DATA.themes;
+const BOOKS = DATA.books;
+
+// ---------- helpers ----------
+function regionKey(ids) { return [...ids].sort().join("|"); }
+function regionBooks(regionIds) {
+  const ids = new Set(regionIds);
+  const sel = new Set(state.selectedThemes);
+  return BOOKS.filter(b => {
+    const inter = b.themes.filter(t => sel.has(t));
+    if (inter.length !== ids.size) return false;
+    return inter.every(t => ids.has(t));
+  });
+}
+function allRegionsForSelected() {
+  // Power set of selectedThemes minus empty set, sorted for stable order
+  const sel = state.selectedThemes;
+  const out = [];
+  for (let mask = 1; mask < (1 << sel.length); mask++) {
+    const subset = [];
+    for (let i = 0; i < sel.length; i++) if (mask & (1 << i)) subset.push(sel[i]);
+    out.push(subset);
+  }
+  // Sort by size ascending so singles come first then intersections
+  out.sort((a, b) => a.length - b.length || a.join().localeCompare(b.join()));
+  return out;
+}
+
+function booksInTheme(tid) { return BOOKS.filter(b => b.themes.includes(tid)); }
+
+// ---------- theme chips ----------
+function renderChips() {
+  const host = document.getElementById("theme-chips");
+  host.innerHTML = "";
+  Object.entries(THEMES).forEach(([tid, meta]) => {
+    const count = booksInTheme(tid).length;
+    const selected = state.selectedThemes.includes(tid);
+    const chip = document.createElement("button");
+    chip.className = "chip" + (selected ? " selected" : "");
+    if (!selected && state.selectedThemes.length >= 3) chip.classList.add("disabled");
+    chip.innerHTML = `<span class="dot" style="background:${meta.color}"></span>${meta.label}<span class="count">${count}</span>`;
+    chip.addEventListener("click", () => {
+      if (selected) {
+        if (state.selectedThemes.length <= 2) return;  // keep at least 2
+        state.selectedThemes = state.selectedThemes.filter(t => t !== tid);
+      } else {
+        if (state.selectedThemes.length >= 3) return;
+        state.selectedThemes = [...state.selectedThemes, tid];
+      }
+      state.selectedRegion = null;
+      state.selectedBook = null;
+      render();
+    });
+    host.appendChild(chip);
+  });
+}
+
+// ---------- Venn geometry ----------
+function vennGeometry(n) {
+  // returns {circles: [{cx,cy,r,tid}], regionPoints: {regionKey: {x,y}}, labelAnchors: [...] }
+  const W = 760, H = 560;
+  const cx = W / 2, cy = 280;
+  if (n === 2) {
+    const r = 150;
+    const d = 105; // center-to-center / 2
+    const circles = [
+      { cx: cx - d, cy: cy, r, tid: state.selectedThemes[0] },
+      { cx: cx + d, cy: cy, r, tid: state.selectedThemes[1] },
+    ];
+    const region = {};
+    region[regionKey([state.selectedThemes[0]])] = { x: cx - 170, y: cy };
+    region[regionKey([state.selectedThemes[1]])] = { x: cx + 170, y: cy };
+    region[regionKey([state.selectedThemes[0], state.selectedThemes[1]])] = { x: cx, y: cy };
+    const labels = [
+      { x: cx - d, y: cy - r - 14, tid: state.selectedThemes[0], anchor: "middle" },
+      { x: cx + d, y: cy - r - 14, tid: state.selectedThemes[1], anchor: "middle" },
+    ];
+    return { circles, regionPoints: region, labelAnchors: labels };
+  }
+  // n === 3 — equilateral triangle of circle centers
+  const r = 140;
+  const centroidX = 380, centroidY = 290;
+  const vDist = 84;   // centroid -> each center
+  const A = { cx: centroidX,        cy: centroidY - vDist,       r, tid: state.selectedThemes[0] };
+  const B = { cx: centroidX - 72.5, cy: centroidY + vDist / 2,   r, tid: state.selectedThemes[1] };
+  const C = { cx: centroidX + 72.5, cy: centroidY + vDist / 2,   r, tid: state.selectedThemes[2] };
+  const circles = [A, B, C];
+  const [a, b, c] = state.selectedThemes;
+  const region = {};
+  // Single-theme regions sit at the outer tip of each circle
+  region[regionKey([a])]       = { x: A.cx,        y: A.cy - 90 };
+  region[regionKey([b])]       = { x: B.cx - 95,   y: B.cy + 40 };
+  region[regionKey([c])]       = { x: C.cx + 95,   y: C.cy + 40 };
+  // Pair intersections sit between the two centers but offset away from the third circle
+  region[regionKey([a, b])]    = { x: 343.75,      y: 230 };
+  region[regionKey([a, c])]    = { x: 416.25,      y: 230 };
+  region[regionKey([b, c])]    = { x: centroidX,   y: 360 };
+  // Triple intersection at centroid
+  region[regionKey([a, b, c])] = { x: centroidX,   y: centroidY };
+
+  const labels = [
+    { x: A.cx,       y: A.cy - r - 16, tid: a, anchor: "middle" },
+    { x: B.cx - 105, y: B.cy + r + 18, tid: b, anchor: "middle" },
+    { x: C.cx + 105, y: C.cy + r + 18, tid: c, anchor: "middle" },
+  ];
+  return { circles, regionPoints: region, labelAnchors: labels };
+}
+
+// ---------- Venn render ----------
+function renderVenn() {
+  const svg = document.getElementById("venn-svg");
+  svg.innerHTML = "";
+  const n = state.selectedThemes.length;
+  if (n < 2) {
+    const empty = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    empty.setAttribute("x", "50%"); empty.setAttribute("y", "50%");
+    empty.setAttribute("text-anchor", "middle"); empty.setAttribute("fill", "#9ea1c4");
+    empty.textContent = "Select at least 2 themes";
+    svg.appendChild(empty);
+    return;
+  }
+  const geom = vennGeometry(n);
+
+  // Circles
+  geom.circles.forEach(c => {
+    const meta = THEMES[c.tid];
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", c.cx); circle.setAttribute("cy", c.cy); circle.setAttribute("r", c.r);
+    circle.setAttribute("class", "venn-circle");
+    circle.setAttribute("fill", meta.color);
+    circle.setAttribute("stroke", meta.color);
+    svg.appendChild(circle);
+  });
+
+  // Theme labels
+  geom.labelAnchors.forEach(l => {
+    const meta = THEMES[l.tid];
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.setAttribute("x", l.x); t.setAttribute("y", l.y);
+    t.setAttribute("text-anchor", l.anchor);
+    t.setAttribute("class", "theme-label");
+    t.setAttribute("fill", meta.color);
+    t.textContent = meta.label;
+    svg.appendChild(t);
+  });
+
+  // Region badges with counts
+  const regions = allRegionsForSelected();
+  regions.forEach(regionIds => {
+    const key = regionKey(regionIds);
+    const pt = geom.regionPoints[key];
+    if (!pt) return;
+    const books = regionBooks(regionIds);
+    const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    g.setAttribute("class", "region-badge" +
+      (books.length === 0 ? " empty" : "") +
+      (state.selectedRegion && regionKey(state.selectedRegion) === key ? " active" : ""));
+    g.setAttribute("transform", `translate(${pt.x}, ${pt.y})`);
+    const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    c.setAttribute("r", 18);
+    g.appendChild(c);
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    t.textContent = books.length;
+    g.appendChild(t);
+    if (books.length > 0) {
+      g.addEventListener("click", () => {
+        state.selectedRegion = regionIds;
+        state.selectedBook = null;
+        render();
+      });
+    }
+    svg.appendChild(g);
+  });
+}
+
+// ---------- Regions strip ----------
+function renderRegionsStrip() {
+  const host = document.getElementById("regions-strip");
+  host.innerHTML = "";
+  if (state.selectedThemes.length < 2) return;
+  const regions = allRegionsForSelected();
+  regions.forEach(regionIds => {
+    const books = regionBooks(regionIds);
+    const active = state.selectedRegion && regionKey(state.selectedRegion) === regionKey(regionIds);
+    const btn = document.createElement("button");
+    btn.className = "region-btn" + (active ? " active" : "") + (books.length === 0 ? " empty" : "");
+    const dots = regionIds.map(id => `<span style="background:${THEMES[id].color}"></span>`).join("");
+    const names = regionIds.map(id => THEMES[id].label.split(" ")[0]).join(" ∩ ");
+    btn.innerHTML = `<span class="region-dots">${dots}</span> <span>${names}</span> <span class="count">${books.length}</span>`;
+    if (books.length > 0) {
+      btn.addEventListener("click", () => {
+        state.selectedRegion = regionIds;
+        state.selectedBook = null;
+        render();
+      });
+    }
+    host.appendChild(btn);
+  });
+}
+
+// ---------- Detail panel ----------
+function renderDetail() {
+  const host = document.getElementById("detail-content");
+  host.innerHTML = "";
+
+  if (state.selectedBook) { renderBookDetail(host, state.selectedBook); return; }
+  if (state.selectedRegion) { renderRegionDetail(host, state.selectedRegion); return; }
+  renderLibrarySummary(host);
+}
+
+function renderLibrarySummary(host) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `
+    <div class="detail-title">Your Library at a Glance</div>
+    <div class="detail-sub">${BOOKS.length} books spanning ${Object.keys(THEMES).length} themes. Click any circle or region to dive in.</div>
+    <h3>Themes</h3>
+  `;
+  host.appendChild(wrap);
+  const grid = document.createElement("div");
+  grid.className = "library-grid";
+  Object.entries(THEMES).forEach(([tid, meta]) => {
+    const count = booksInTheme(tid).length;
+    const card = document.createElement("div");
+    card.className = "library-card";
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="width:10px;height:10px;border-radius:50%;background:${meta.color};"></span>
+        <div class="lt">${meta.label}</div>
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)">${count}</span>
+      </div>
+      <div class="la" style="margin-top:6px">${meta.description}</div>
+    `;
+    card.addEventListener("click", () => {
+      // Make clicking a theme card toggle that theme on + pick it as the active region if single-theme
+      if (!state.selectedThemes.includes(tid)) {
+        if (state.selectedThemes.length >= 3) state.selectedThemes.shift();
+        state.selectedThemes = [...state.selectedThemes, tid];
+      }
+      state.selectedRegion = [tid];
+      state.selectedBook = null;
+      render();
+    });
+    grid.appendChild(card);
+  });
+  host.appendChild(grid);
+}
+
+function renderRegionDetail(host, regionIds) {
+  const books = regionBooks(regionIds);
+  const names = regionIds.map(id => THEMES[id].label).join(" ∩ ");
+  const header = document.createElement("div");
+  header.className = "detail-header";
+  header.innerHTML = `
+    <div>
+      <div class="detail-title">${names}</div>
+      <div class="detail-sub">${books.length} book${books.length === 1 ? "" : "s"} sit in this region</div>
+      <div class="theme-pills">${regionIds.map(id =>
+        `<span class="theme-pill"><span class="dot" style="background:${THEMES[id].color}"></span>${THEMES[id].label}</span>`
+      ).join("")}</div>
+    </div>
+    <button class="back-btn" id="clear-region">clear</button>
+  `;
+  host.appendChild(header);
+  host.querySelector("#clear-region").addEventListener("click", () => {
+    state.selectedRegion = null; state.selectedBook = null; render();
+  });
+
+  if (books.length === 0) {
+    const e = document.createElement("div"); e.className = "empty-detail";
+    e.textContent = "No books sit at this exact overlap yet.";
+    host.appendChild(e);
+    return;
+  }
+
+  // Books list
+  const h3 = document.createElement("h3"); h3.textContent = "Books in this region";
+  host.appendChild(h3);
+  const ul = document.createElement("ul"); ul.className = "books-list";
+  books.forEach(b => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span><span class="title">${b.title}</span> <span class="author">${b.author || ""}</span></span><span style="color:#9ea1c4;font-size:11px">→</span>`;
+    li.addEventListener("click", () => { state.selectedBook = b.title; render(); });
+    ul.appendChild(li);
+  });
+  host.appendChild(ul);
+
+  if (books.length >= 2) {
+    // Shared keywords
+    const kwCount = new Map();
+    books.forEach(b => b.keywords.forEach(k => kwCount.set(k, (kwCount.get(k) || 0) + 1)));
+    const sharedKw = [...kwCount.entries()].filter(([_, c]) => c >= 2).sort((a,b) => b[1]-a[1]).map(([k]) => k);
+    if (sharedKw.length) {
+      const hk = document.createElement("h3"); hk.textContent = "Shared keywords";
+      host.appendChild(hk);
+      const tags = document.createElement("div"); tags.className = "tags";
+      sharedKw.slice(0, 20).forEach(k => {
+        const t = document.createElement("span"); t.className = "tag kw"; t.textContent = k; tags.appendChild(t);
+      });
+      host.appendChild(tags);
+    }
+    // Shared entities
+    const enCount = new Map();
+    books.forEach(b => b.entities.forEach(e => enCount.set(e, (enCount.get(e) || 0) + 1)));
+    const sharedEn = [...enCount.entries()].filter(([_, c]) => c >= 2).sort((a,b) => b[1]-a[1]).map(([e]) => e);
+    if (sharedEn.length) {
+      const he = document.createElement("h3"); he.textContent = "Shared names & entities";
+      host.appendChild(he);
+      const tags = document.createElement("div"); tags.className = "tags";
+      sharedEn.slice(0, 15).forEach(k => {
+        const t = document.createElement("span"); t.className = "tag en"; t.textContent = k; tags.appendChild(t);
+      });
+      host.appendChild(tags);
+    }
+  }
+
+  // Representative quotes: pick up to one from each book
+  const quotes = [];
+  for (const b of books) {
+    if (b.quotes && b.quotes[0]) quotes.push({ quote: b.quotes[0], title: b.title });
+    if (quotes.length >= 4) break;
+  }
+  if (quotes.length) {
+    const hq = document.createElement("h3"); hq.textContent = "Voices from this region";
+    host.appendChild(hq);
+    quotes.forEach(q => {
+      const bq = document.createElement("blockquote"); bq.className = "quote";
+      bq.innerHTML = `${q.quote} <div style="margin-top:6px;font-size:11px;color:var(--muted)">— ${q.title}</div>`;
+      host.appendChild(bq);
+    });
+  }
+}
+
+function renderBookDetail(host, title) {
+  const b = BOOKS.find(x => x.title === title);
+  if (!b) return;
+  const header = document.createElement("div");
+  header.className = "detail-header";
+  header.innerHTML = `
+    <div>
+      <div class="detail-title">${b.title}</div>
+      <div class="detail-sub">${b.author || "—"} · added ${b.created || ""}</div>
+      <div class="theme-pills">${b.themes.map(id =>
+        `<span class="theme-pill"><span class="dot" style="background:${THEMES[id].color}"></span>${THEMES[id].label}</span>`
+      ).join("")}</div>
+    </div>
+    <button class="back-btn" id="back-btn">back</button>
+  `;
+  host.appendChild(header);
+  host.querySelector("#back-btn").addEventListener("click", () => { state.selectedBook = null; render(); });
+
+  if (b.three_sentences) {
+    const h3 = document.createElement("h3"); h3.textContent = "In 3 sentences";
+    host.appendChild(h3);
+    const p = document.createElement("div"); p.style.fontSize = "13px"; p.style.lineHeight = "1.55";
+    p.innerHTML = b.three_sentences.replace(/\n/g, "<br>");
+    host.appendChild(p);
+  }
+  if (b.keywords && b.keywords.length) {
+    const h3 = document.createElement("h3"); h3.textContent = "Key words & phrases";
+    host.appendChild(h3);
+    const tags = document.createElement("div"); tags.className = "tags";
+    b.keywords.slice(0, 14).forEach(k => {
+      const t = document.createElement("span"); t.className = "tag kw"; t.textContent = k; tags.appendChild(t);
+    });
+    host.appendChild(tags);
+  }
+  if (b.entities && b.entities.length) {
+    const h3 = document.createElement("h3"); h3.textContent = "Named entities";
+    host.appendChild(h3);
+    const tags = document.createElement("div"); tags.className = "tags";
+    b.entities.slice(0, 10).forEach(k => {
+      const t = document.createElement("span"); t.className = "tag en"; t.textContent = k; tags.appendChild(t);
+    });
+    host.appendChild(tags);
+  }
+  if (b.quotes && b.quotes.length) {
+    const h3 = document.createElement("h3"); h3.textContent = "Standout quotes";
+    host.appendChild(h3);
+    b.quotes.forEach(q => {
+      const bq = document.createElement("blockquote"); bq.className = "quote"; bq.textContent = q;
+      host.appendChild(bq);
+    });
+  }
+}
+
+// ---------- library grid (browse all) ----------
+function renderLibrary() {
+  const host = document.getElementById("library-grid");
+  const btn = document.getElementById("lib-toggle-btn");
+  host.innerHTML = "";
+  host.style.display = state.libraryOpen ? "grid" : "none";
+  btn.textContent = state.libraryOpen ? "Hide full library ▴" : "Browse full library ▾";
+  if (!state.libraryOpen) return;
+  const sorted = [...BOOKS].sort((a, b) => a.title.localeCompare(b.title));
+  sorted.forEach(b => {
+    const card = document.createElement("div");
+    card.className = "library-card";
+    card.innerHTML = `
+      <div class="lt">${b.title}</div>
+      <div class="la">${b.author || ""}</div>
+      <div class="theme-pills" style="margin-top:8px">
+        ${b.themes.map(t => `<span class="theme-pill"><span class="dot" style="background:${THEMES[t].color}"></span>${THEMES[t].label}</span>`).join("")}
+      </div>
+    `;
+    card.addEventListener("click", () => { state.selectedBook = b.title; render(); });
+    host.appendChild(card);
+  });
+}
+
+// ---------- orchestration ----------
+function render() {
+  renderChips();
+  renderVenn();
+  renderRegionsStrip();
+  renderDetail();
+  renderLibrary();
+}
+
+// Init
+document.getElementById("stat-books").textContent = BOOKS.length;
+document.getElementById("stat-themes").textContent = Object.keys(THEMES).length;
+document.getElementById("generated-at").textContent = "Generated " + new Date().toISOString().slice(0, 10);
+document.getElementById("lib-toggle-btn").addEventListener("click", () => {
+  state.libraryOpen = !state.libraryOpen;
+  renderLibrary();
+});
+
+render();
+</script>
+</body>
+</html>
